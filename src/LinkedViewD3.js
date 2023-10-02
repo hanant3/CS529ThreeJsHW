@@ -18,11 +18,62 @@ function makeVelocityGlyph(d,axis,scale=1){
 
     let xpos = xv/scale
     let ypos = yv/scale
-    let path = 'M ' + xpos + ',' + ypos + ' '
-        + -ypos/3 + ',' + xpos/3 + ' '
-        + ypos/3 + ',' + -xpos/3 + 'z'
+    // Adjust sizes based on axis
+    let triangleScale = 1;
+    let circleScale = 1;
+    if (axis === 'y') {
+        triangleScale = 1.5;  // Increase triangle size for Y axis
+        circleScale = 1;    // Increase circle size for Y axis
+    } else {
+        circleScale = 0.5;    // Decrease circle size for X and Z axes
+    }
+
+    let path = 'M ' + (xpos * triangleScale) + ',' + (ypos * triangleScale) + ' '
+        + (-ypos/3 * triangleScale) + ',' + (xpos/3 * triangleScale) + ' '
+        + (ypos/3 * triangleScale) + ',' + (-xpos/3 * triangleScale) + 'z';
+
+    // Add a circle glyph for concentration
+    let circleRadius = d.concentration * scale * 2;
+    path += ' M ' + xpos + ',' + ypos + ' m -' + circleRadius + ', 0 a ' + circleRadius + ',' + circleRadius + ' 0 1,0 ' + (circleRadius*2) + ',0 a ' + circleRadius + ',' + circleRadius + ' 0 1,0 -' + (circleRadius*2) + ',0';
+
     return path;
 }
+
+function makeCompositeGlyph(d, axis, scale=1) {
+    var xv = d.velocity[1];
+    var yv = d.velocity[2];
+    if(axis == 'y'){
+        xv = d.velocity[0];
+        yv =  d.velocity[1];
+    } else if(axis == 'z'){
+        xv = d.velocity[0];
+    }
+
+    let xpos = xv/scale;
+    let ypos = yv/scale;
+    
+    // Adjust sizes based on axis
+    let triangleScale = 1;
+    let circleScale = 1;
+    if (axis === 'y') { // For Y axes
+        triangleScale = 1.1;  
+        circleScale = 3.5;    
+    } else {  // For X and Z axes
+        triangleScale = 1.2;  
+        circleScale = 0.5;    
+    }
+
+    let path = 'M ' + (xpos * triangleScale) + ',' + (ypos * triangleScale) + ' '
+        + (-ypos/3 * triangleScale) + ',' + (xpos/3 * triangleScale) + ' '
+        + (ypos/3 * triangleScale) + ',' + (-xpos/3 * triangleScale) + 'z';
+
+    // Add a circle glyph for concentration
+    let circleRadius = d.concentration * scale * circleScale;
+    path += ' M ' + xpos + ',' + ypos + ' m -' + circleRadius + ', 0 a ' + circleRadius + ',' + circleRadius + ' 0 1,0 ' + (circleRadius*2) + ',0 a ' + circleRadius + ',' + circleRadius + ' 0 1,0 -' + (circleRadius*2) + ',0';
+
+    return path;
+}
+
 
 export default function LinkedViewD3(props){
     //this is a generic component for plotting a d3 plot
@@ -65,6 +116,18 @@ export default function LinkedViewD3(props){
 
             //TODO: filter out points with a concentration of less than 80% of the maximum value of the current filtered datapoints
 
+            // Calculate the threshold value for concentration
+            let maxConcentration = d3.max(data, d => d.concentration);
+            let threshold = 0.5 * maxConcentration;
+
+            // Filter the data based on the threshold
+            data = data.filter(d => d.concentration >= threshold);
+
+            // Modify the domain of the concentrationColorScale to map to concentration values
+            let concentrationExtents = d3.extent(data, d => d.concentration);
+            let concentrationColorScale = d3.scaleLinear()
+                .domain(d3.extent(data, d => d.concentration))
+                .range(props.colorRange);
 
             //limit the data to a maximum size to prevent occlusion
             data.sort((a,b) => bDist(a) - bDist(b));
@@ -99,13 +162,13 @@ export default function LinkedViewD3(props){
                 .attr('class','glyph')
                 .merge(dots)
                 .transition(100)
-                .attr('d', d => makeVelocityGlyph(d,props.brushedAxis,.25*vMax/radius))
-                .attr('fill',d=>colorScale(getY(d)))
+                .attr('d', d => makeCompositeGlyph(d,props.brushedAxis,.25*vMax/radius))
+                .attr('fill',d=>concentrationColorScale(d.concentration))
                 .attr('stroke','black')
                 .attr('stroke-width',.1)
                 .attr('transform',d=>'translate(' + xScale(getX(d)) + ',' + yScale(getY(d)) + ')');
 
-            dots.exit().remove()
+            dots.exit().remove();
         }
     },[svg,props.data,props.getBrushedCoord,props.bounds])
 
